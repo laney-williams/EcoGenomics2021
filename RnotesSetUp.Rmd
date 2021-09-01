@@ -1,0 +1,8 @@
+---
+title: "EcoGenomicsNotes"
+author: "Laney Williams"
+date: "9/1/2021"
+output: html_document
+---
+
+## Setting up my github notebook
