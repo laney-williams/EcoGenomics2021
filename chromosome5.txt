@@ -1,0 +1,53 @@
+#!/bin/bash
+
+# Rename value in <> to your chromosome number! Include the zero only if your chromosome # is <10
+
+myChr=Chr05  
+
+# myChr=Chr05  # I used Chr05 for my test run...
+
+
+cd /data/project_data/PopGenomics
+
+# Run VCFtools to subset the big vcf file for just your chromosome
+
+vcftools --gzvcf poplar_hybrids.maf05.vcf.gz \
+--chr $myChr \
+--out shared/$myChr \
+--recode
+
+
+# Extract the centromere coordinates for your chromosome so you can exclude those regions from your sweep analysis
+
+grep $myChr poplar_centromeres.txt > shared/${myChr}_centromere.txt # grab the centromere location for your chromosome
+
+cd shared/
+
+mkdir ${myChr}_sweeps  # make a new directory for your chromosome analyses
+
+mv *${myChr}* ${myChr}_sweeps # clean up the space by moving all files into your the directory you just made
+
+cd ${myChr}_sweeps
+
+# Test for selective sweeps
+
+RAiSD -n $myChr \
+-I ${myChr}.recode.vcf \
+-f -t -R -P -D -A 0.99 \
+-X ${myChr}_centromere.txt
+
+# Estimate nucleotide diversity (pi) in sliding windows of 50kb
+
+vcftools --vcf ${myChr}.recode.vcf \
+--chr $myChr \
+--window-pi 50000 \
+--out $myChr
+
+# Calculate Fst between Balsam and Tricho using sliding windows of 50kb
+
+vcftools --vcf ${myChr}.recode.vcf \
+--weir-fst-pop Bals_Inds.txt \
+--weir-fst-pop Tricho_Inds.txt \
+--fst-window-size 50000 \
+--out Bals_Tricho_All
+

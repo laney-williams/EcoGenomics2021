@@ -1,0 +1,66 @@
+## As LOTER files get output, can convert these into 0/1/2 encoding using the bash tool 'datamash'
+
+## From within your LAI/ directory:
+
+CHR="Chr05"
+
+echo $CHR # Is it right?
+
+Nsites=`tail -n +2 ${CHR}.kept.sites | wc -l | sed 's/\s/\t/' | cut -f1` # calculates and stores the number of SNP sites for your chromosome
+
+echo $Nsites # For Chr02, Nsites=281887 SNPs
+
+Ninds=`wc -l Admixed.Inds | sed 's/\s/\t/' | cut -f1` # calculates and stores the number of admixed individuals you previously identified
+
+echo $Ninds  # Should be 442 individuals
+
+
+
+touch ${CHR}_matrix.diploid # touch command sets up a file with nothing in it as a container
+
+for file in Loter_out/*.txt
+do
+datamash --field-separator=" " sum 1-${Nsites} <$file >>${CHR}_matrix.diploid # summing up each column across rows. '>>' appends the file with each new output from each loop.
+done
+
+
+sed 's/\s/\t/g' ${CHR}_matrix.diploid | cut -f1-${Nsites} | datamash transpose >${CHR}_matrix.diploid.tr
+# Replaces spaces in 0s and 1s with tabs in the diploid matrix file. Datamash transposes the matrix from wide to long format
+
+
+# converting to plink format
+seq -f "snp%02g" 1 $Nsites >sites
+
+printf 'A\n%.0s' $(seq $Nsites) >allele1  # Create a dummy column of 'A' the length of your Nsites file
+
+printf "T\n%.0s" $(seq $Nsites) >allele2 # Create a dummy column of 'T' the length of your Nsites file
+
+mkdir Plink
+
+paste sites allele1 allele2 ${CHR}_matrix.diploid.tr >Plink/${CHR}_matrix.diploid.tr.forPlink # bind together sites. Allele1, allele2, diploid matrix.
+
+# AA= 0, AT=1, TT=2
+
+
+# create fam file
+cat /data/project_data/PopGenomics/Combined_Transect_Sampling_Data_2020.txt | \ # opens up metadata file 
+cut -f1-2 | \ # Takes first two columns of metadata file
+grep -w -f Admixed.Inds - | \ # match IDs with admixed file (matches entire word with search term from Admixed file)
+cut -f2 | \ 
+paste - Admixed.Inds >FID_IID
+
+printf '0\t0\t0\t-9\n%.0s' $(seq $Ninds) >dummy
+
+paste FID_IID dummy  >Plink/${CHR}_fam.forPlink
+
+
+## This runs the Plink conversion from allele dosages to bed format
+
+cd Plink/ 
+
+plink2 --import-dosage ${CHR}_matrix.diploid.tr.forPlink noheader \
+--fam ${CHR}_fam.forPlink \
+--make-bed \
+--out ${CHR}_Admixed_FAI
+
+plink2 --bfile ${CHR}_Admixed_FAI --freq --out ${CHR}_LAI_freq
